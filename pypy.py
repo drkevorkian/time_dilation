@@ -273,7 +273,9 @@ class TimeDilationCalculator(tk.Tk):
         self.velocity_var = tk.StringVar()
         self.velocity_entry = ttk.Entry(main_frame, textvariable=self.velocity_var, width=40)
         self.velocity_entry.grid(row=0, column=1, sticky=tk.W, pady=5)
-        ttk.Label(main_frame, text="e.g., 99.999999999999").grid(row=0, column=2, sticky=tk.W, pady=5)
+        self.velocity_entry.insert(0, "99.999999999999")
+        self.velocity_entry.bind("<FocusIn>", self.clear_placeholder)
+        self.velocity_entry.bind("<FocusOut>", self.restore_placeholder)
 
         # Add measurement type selection
         ttk.Label(main_frame, text="Measurement Type:").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -338,7 +340,10 @@ class TimeDilationCalculator(tk.Tk):
 
         # Add tooltips to input fields
         self.create_tooltip(self.velocity_entry, 
-            "Enter velocity as a percentage of light speed (0-100 exclusive)")
+            "Enter velocity as a percentage of light speed (0-100 exclusive)"
+            "e.g., 99.999999999999, this will accuratly calculate a "
+             " max of 199 digits past the decimal point"
+            )
         self.create_tooltip(self.measurement_combo, 
             "Select the measurement type (Time/Distance)")
         self.create_tooltip(self.copy_button, 
@@ -519,6 +524,16 @@ class TimeDilationCalculator(tk.Tk):
             self.status_var.set("Error in calculation")
             logging.error(f"Calculation error: {str(e)}")
             self.progress_var.set(self.PROGRESS_STEPS['START'])
+
+    def clear_placeholder(self, event):
+        """Clear placeholder text when entry gets focus."""
+        if self.velocity_entry.get() == "99.999999999999":
+            self.velocity_entry.delete(0, tk.END)
+
+    def restore_placeholder(self, event):
+        """Restore placeholder text if entry is empty and loses focus."""
+        if not self.velocity_entry.get():
+            self.velocity_entry.insert(0, "99.999999999999")
 
 if __name__ == "__main__":
     # Set up logging with timestamp
