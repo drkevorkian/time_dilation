@@ -40,7 +40,23 @@ SI_PREFIXES = [
 ]
 
 def safe_decimal_convert(value, error_msg="Invalid decimal conversion"):
-    """Safely convert values to Decimal with proper error handling."""
+    """
+    Safely convert values to Decimal with proper error handling.
+    
+    Args:
+        value: The value to convert to Decimal
+        error_msg (str): Custom error message for logging
+        
+    Returns:
+        Decimal: The converted value
+        None: If conversion fails
+        
+    Example:
+        >>> safe_decimal_convert("123.456")
+        Decimal('123.456')
+        >>> safe_decimal_convert("invalid")
+        None
+    """
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError) as e:
@@ -127,7 +143,16 @@ def format_output(earth_time, traveler_time, gamma, velocity_str, unit="m/s"):
         return "Error formatting output"
 
 class TimeDilationCalculator(tk.Tk):
+    """
+    Main application window for the Time Dilation Calculator.
+    
+    This class handles the GUI interface and calculation logic for computing
+    relativistic time dilation effects. It includes input validation, progress
+    tracking, and result formatting.
+    """
+    
     def __init__(self):
+        """Initialize the calculator window and set up the GUI components."""
         super().__init__()
         
         # Add security measures
@@ -195,6 +220,51 @@ class TimeDilationCalculator(tk.Tk):
         self.status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.grid(row=1, column=0, sticky=(tk.W, tk.E))
 
+        # Add tooltips to input fields
+        self.create_tooltip(self.velocity_entry, 
+            "Enter velocity as a percentage of light speed (0-100 exclusive)")
+        self.create_tooltip(self.time_entry, 
+            "Enter the amount of time that passes on Earth (in years)")
+        self.create_tooltip(self.unit_combo, 
+            "Select the unit for displaying the speed of light")
+        self.create_tooltip(self.copy_button, 
+            "Copy the calculation results to clipboard")
+        
+        # Update progress bar steps
+        self.PROGRESS_STEPS = {
+            'START': 0,
+            'INPUT_VALIDATED': 20,
+            'UNIT_SELECTED': 30,
+            'GAMMA_CALCULATED': 60,
+            'TIME_CALCULATED': 80,
+            'COMPLETE': 100
+        }
+
+    def create_tooltip(self, widget, text):
+        """
+        Create a tooltip for a given widget.
+        
+        Args:
+            widget: The tkinter widget to add the tooltip to
+            text (str): The tooltip text to display
+        """
+        def show_tooltip(event):
+            tooltip = tk.Toplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            
+            label = ttk.Label(tooltip, text=text, background="#ffffe0", 
+                            relief='solid', borderwidth=1)
+            label.pack()
+            
+            def hide_tooltip():
+                tooltip.destroy()
+            
+            widget.tooltip = tooltip
+            widget.bind('<Leave>', lambda e: hide_tooltip())
+            
+        widget.bind('<Enter>', show_tooltip)
+    
     def copy_results(self):
         """Copy results to clipboard with proper error handling."""
         try:
@@ -216,13 +286,25 @@ class TimeDilationCalculator(tk.Tk):
             self.destroy()
             
     def calculate(self):
-        """Perform time dilation calculations with enhanced validation and security."""
+        """
+        Perform time dilation calculations with enhanced validation and progress tracking.
+        
+        This method:
+        1. Validates user input
+        2. Performs the time dilation calculation
+        3. Updates the progress bar
+        4. Displays formatted results
+        
+        Raises:
+            ValueError: For invalid input values
+            ArithmeticError: For calculation errors
+        """
         self.results_text.delete(1.0, tk.END)
         self.status_var.set("Calculating...")
-        self.progress_var.set(0)
+        self.progress_var.set(self.PROGRESS_STEPS['START'])
         
         try:
-            # Input validation with specific error messages
+            # Input validation
             velocity = safe_decimal_convert(self.velocity_var.get())
             if velocity is None:
                 raise ValueError("Please enter a valid number for velocity")
@@ -231,60 +313,79 @@ class TimeDilationCalculator(tk.Tk):
             if earth_time is None:
                 raise ValueError("Please enter a valid number for time")
             
+            self.progress_var.set(self.PROGRESS_STEPS['INPUT_VALIDATED'])
+            
+            # Velocity range validation
             if not (0 < velocity < 100):
                 raise ValueError("Velocity must be between 0 and 100 percent of c (exclusive)")
             
             if velocity >= 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999:
-                raise ValueError("Velocity too close to speed of light - calculation would be unreliable")
-                
+                raise ValueError(
+                    "Velocity is too close to the speed of light. "
+                    "Calculations become unreliable above 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999% of c due to "
+                    "extreme relativistic effects."
+                )
+            
             if earth_time <= 0:
                 raise ValueError("Time must be positive")
-                
-            # Get selected unit and corresponding c value
+            
+            # Unit selection and calculation
             unit_index = ["m/s", "cm/s", "mm/s", "μm/s", "nm/s"].index(self.unit_var.get())
             c_current = c_units[unit_index]
             
-            self.progress_var.set(50)  # Update progress
+            self.progress_var.set(self.PROGRESS_STEPS['UNIT_SELECTED'])
             
-            # Perform calculation
+            # Calculate gamma factor
             gamma = time_dilation_factor(velocity, c_current)
-            if gamma is not None:
-                earth_time_seconds = earth_time * Decimal("31557600")
-                traveler_time_seconds = time_dilation(earth_time_seconds, velocity, c_current)
-                
-                result = format_output(
-                    earth_time_seconds,
-                    traveler_time_seconds,
-                    gamma,
-                    str(velocity),
-                    f"{format_large_or_small_number(c_current)} {self.unit_var.get()}"
-                )
-                
-                self.results_text.insert(tk.END, result)
-                self.status_var.set("Calculation complete")
-                
-                # Log calculation details for debugging
-                logging.info(f"Calculation completed - Velocity: {velocity}%, Time: {earth_time} years, "
-                           f"Gamma: {gamma}, Unit: {self.unit_var.get()}")
-            else:
+            if gamma is None:
                 raise ValueError("Invalid calculation result")
-                
-            self.progress_var.set(100)  # Complete progress
+            
+            self.progress_var.set(self.PROGRESS_STEPS['GAMMA_CALCULATED'])
+            
+            # Calculate time dilation
+            earth_time_seconds = earth_time * Decimal("31557600")
+            traveler_time_seconds = time_dilation(earth_time_seconds, velocity, c_current)
+            
+            self.progress_var.set(self.PROGRESS_STEPS['TIME_CALCULATED'])
+            
+            # Format and display results
+            result = format_output(
+                earth_time_seconds,
+                traveler_time_seconds,
+                gamma,
+                str(velocity),
+                f"{format_large_or_small_number(c_current)} {self.unit_var.get()}"
+            )
+            
+            self.results_text.insert(tk.END, result)
+            self.status_var.set("Calculation complete")
+            
+            # Log calculation details
+            logging.info(
+                f"Calculation completed - "
+                f"Velocity: {velocity}%, "
+                f"Time: {earth_time} years, "
+                f"Gamma: {gamma}, "
+                f"Unit: {self.unit_var.get()}"
+            )
+            
+            self.progress_var.set(self.PROGRESS_STEPS['COMPLETE'])
             
         except Exception as e:
             self.results_text.insert(tk.END, f"Error: {str(e)}")
             self.status_var.set("Error in calculation")
             logging.error(f"Calculation error: {str(e)}")
-            self.progress_var.set(0)
+            self.progress_var.set(self.PROGRESS_STEPS['START'])
 
 if __name__ == "__main__":
-    # Set up logging
+    # Set up logging with timestamp
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         filename='time_dilation.log'
     )
     
-    # Create and run the application
+    logging.info("Application starting")
     app = TimeDilationCalculator()
     app.mainloop()
+    logging.info("Application closing")
