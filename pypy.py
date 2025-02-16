@@ -295,7 +295,7 @@ class TimeDilationCalculator(tk.Tk):
 
         # Add distance unit selection (initially hidden)
         self.distance_unit_label = ttk.Label(main_frame, text="Distance Unit:")
-        self.distance_unit_var = tk.StringVar(value="ly")
+        self.distance_unit_var = tk.StringVar(value="Light Years (ly)")  # Set default with full text
         self.distance_unit_combo = ttk.Combobox(main_frame, textvariable=self.distance_unit_var,
                                                values=["Light Years (ly)", "Kilometers (km)", "Miles (mi)"],
                                                state="readonly", width=20)
@@ -457,7 +457,17 @@ class TimeDilationCalculator(tk.Tk):
 
             # Calculate earth time based on measurement type
             if measurement_type == "Distance":
-                unit = self.distance_unit_var.get()[:2].lower()  # Get 'ly', 'km', or 'mi'
+                # Extract unit code from the full text
+                unit_text = self.distance_unit_var.get()
+                if "Light Years" in unit_text:
+                    unit = 'ly'
+                elif "Kilometers" in unit_text:
+                    unit = 'km'
+                elif "Miles" in unit_text:
+                    unit = 'mi'
+                else:
+                    raise ValueError(f"Unsupported unit: {unit_text}")
+                    
                 # Calculate how long it takes to travel the distance at given velocity
                 earth_time = convert_distance_to_travel_time(input_value, velocity, unit)
                 if earth_time is None:
