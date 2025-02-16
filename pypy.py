@@ -39,6 +39,10 @@ SI_PREFIXES = [
     (Decimal("1e-30"), "Quecto")
 ]
 
+# Distance conversion constants (as Decimal)
+KM_PER_LIGHTYEAR = Decimal("9.461e12")  # kilometers in a light year
+MILES_PER_LIGHTYEAR = Decimal("5.879e12")  # miles in a light year
+
 def safe_decimal_convert(value, error_msg="Invalid decimal conversion"):
     """
     Safely convert values to Decimal with proper error handling.
@@ -120,23 +124,111 @@ def time_dilation(time_earth, velocity_percentage, c):
         return None
     return Decimal(str(time_earth)) / gamma
 
-def format_output(earth_time, traveler_time, gamma, velocity_str, unit="m/s"):
-    """Format calculation results with proper spacing and alignment."""
+def convert_to_lightyears(value, from_unit):
+    """
+    Convert a distance value to light years.
+    
+    Args:
+        value (Decimal): The distance value to convert
+        from_unit (str): The unit to convert from ('ly', 'km', 'mi')
+        
+    Returns:
+        Decimal: The distance in light years
+    """
+    try:
+        value = Decimal(str(value))
+        if from_unit == 'ly':
+            return value
+        elif from_unit == 'km':
+            return value / KM_PER_LIGHTYEAR
+        elif from_unit == 'mi':
+            return value / MILES_PER_LIGHTYEAR
+        else:
+            raise ValueError(f"Unsupported unit: {from_unit}")
+    except (InvalidOperation, DivisionByZero) as e:
+        logging.error(f"Conversion error: {str(e)}")
+        return None
+
+def convert_from_lightyears(lightyears, to_unit):
+    """
+    Convert from light years to specified unit.
+    
+    Args:
+        lightyears (Decimal): The distance in light years
+        to_unit (str): The unit to convert to ('ly', 'km', 'mi')
+        
+    Returns:
+        Decimal: The converted distance value
+    """
+    try:
+        lightyears = Decimal(str(lightyears))
+        if to_unit == 'ly':
+            return lightyears
+        elif to_unit == 'km':
+            return lightyears * KM_PER_LIGHTYEAR
+        elif to_unit == 'mi':
+            return lightyears * MILES_PER_LIGHTYEAR
+        else:
+            raise ValueError(f"Unsupported unit: {to_unit}")
+    except (InvalidOperation, DivisionByZero) as e:
+        logging.error(f"Conversion error: {str(e)}")
+        return None
+
+def convert_distance_to_travel_time(distance, velocity_percentage, from_unit='ly'):
+    """
+    Convert a distance to the time it would take to travel at given velocity.
+    
+    Args:
+        distance (Decimal): The distance to travel
+        velocity_percentage (Decimal): Velocity as percentage of c
+        from_unit (str): The unit of distance ('ly', 'km', 'mi')
+        
+    Returns:
+        Decimal: The time in years it would take to travel this distance at given velocity
+    """
+    try:
+        # First convert distance to light years if needed
+        if from_unit == 'ly':
+            light_years = Decimal(str(distance))
+        elif from_unit == 'km':
+            light_years = Decimal(str(distance)) / KM_PER_LIGHTYEAR
+        elif from_unit == 'mi':
+            light_years = Decimal(str(distance)) / MILES_PER_LIGHTYEAR
+        else:
+            raise ValueError(f"Unsupported unit: {from_unit}")
+            
+        # Calculate travel time: distance / velocity
+        velocity_fraction = velocity_percentage / 100
+        travel_time_years = light_years / velocity_fraction
+        
+        return travel_time_years * Decimal("31557600")  # Convert years to seconds
+        
+    except (InvalidOperation, DivisionByZero) as e:
+        logging.error(f"Travel time calculation error: {str(e)}")
+        return None
+
+def format_output(earth_time, traveler_time, gamma, velocity_str, unit="m/s", measurement_type="Time"):
+    """Format calculation results with measurement type."""
     try:
         output = [
             "\n=== Time Dilation Calculation Results ===",
             f"Velocity: {velocity_str}% of c ({unit})",
             f"Gamma factor: {format_large_or_small_number(gamma)}",
-            "\nTime Breakdown:",
+            "\nMeasurement Details:",
             "-" * 40,
+        ]
+        
+        # Always show results as time
+        output.extend([
             "Earth time:",
             f"  {format_time(earth_time)}",
             f"  ({format_large_or_small_number(earth_time)} seconds)",
             "\nTraveler time:",
             f"  {format_time(traveler_time)}",
             f"  ({format_large_or_small_number(traveler_time)} seconds)",
-            "-" * 40
-        ]
+        ])
+        
+        output.append("-" * 40)
         return "\n".join(output)
     except Exception as e:
         logging.error(f"Output formatting error: {str(e)}")
@@ -183,37 +275,61 @@ class TimeDilationCalculator(tk.Tk):
         self.velocity_entry.grid(row=0, column=1, sticky=tk.W, pady=5)
         ttk.Label(main_frame, text="e.g., 99.999999999999").grid(row=0, column=2, sticky=tk.W, pady=5)
 
-        ttk.Label(main_frame, text="Time on Earth (years):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        # Add measurement type selection
+        ttk.Label(main_frame, text="Measurement Type:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.measurement_var = tk.StringVar(value="Time")
+        self.measurement_combo = ttk.Combobox(main_frame, textvariable=self.measurement_var,
+                                            values=["Time", "Distance"],
+                                            state="readonly")
+        self.measurement_combo.grid(row=1, column=1, sticky=tk.W, pady=5)
+        self.measurement_combo.bind('<<ComboboxSelected>>', self.update_measurement_label)
+
+        # Input field for time/distance with stored reference
+        self.measurement_label = ttk.Label(main_frame, text="Time on Earth (years):")
+        self.measurement_label.grid(row=2, column=0, sticky=tk.W, pady=5)
         self.time_var = tk.StringVar()
         self.time_entry = ttk.Entry(main_frame, textvariable=self.time_var, width=40)
-        self.time_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
+        self.time_entry.grid(row=2, column=1, sticky=tk.W, pady=5)
+
+        # Add distance unit selection (initially hidden)
+        self.distance_unit_label = ttk.Label(main_frame, text="Distance Unit:")
+        self.distance_unit_var = tk.StringVar(value="ly")
+        self.distance_unit_combo = ttk.Combobox(main_frame, textvariable=self.distance_unit_var,
+                                               values=["Light Years (ly)", "Kilometers (km)", "Miles (mi)"],
+                                               state="readonly", width=20)
+        
+        # Hide distance unit widgets initially
+        self.distance_unit_label.grid(row=2, column=2, sticky=tk.W, pady=5)
+        self.distance_unit_combo.grid(row=2, column=3, sticky=tk.W, pady=5)
+        self.distance_unit_label.grid_remove()
+        self.distance_unit_combo.grid_remove()
 
         # Add unit selection
-        ttk.Label(main_frame, text="Speed of Light Unit:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Speed of Light Unit:").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.unit_var = tk.StringVar(value="m/s")
         self.unit_combo = ttk.Combobox(main_frame, textvariable=self.unit_var, 
                                       values=["m/s", "cm/s", "mm/s", "μm/s", "nm/s"],
                                       state="readonly")
-        self.unit_combo.grid(row=2, column=1, sticky=tk.W, pady=5)
+        self.unit_combo.grid(row=3, column=1, sticky=tk.W, pady=5)
         
         # Calculate button
         self.calc_button = ttk.Button(main_frame, text="Calculate", command=self.calculate)
-        self.calc_button.grid(row=3, column=0, columnspan=3, pady=20)
+        self.calc_button.grid(row=4, column=0, columnspan=3, pady=20)
 
         # Results display
-        ttk.Label(main_frame, text="Results:").grid(row=4, column=0, sticky=tk.W)
+        ttk.Label(main_frame, text="Results:").grid(row=5, column=0, sticky=tk.W)
         self.results_text = scrolledtext.ScrolledText(main_frame, width=80, height=20)
-        self.results_text.grid(row=5, column=0, columnspan=3, pady=5, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.results_text.grid(row=6, column=0, columnspan=3, pady=5, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Add copy button
         self.copy_button = ttk.Button(main_frame, text="Copy Results", command=self.copy_results)
-        self.copy_button.grid(row=6, column=0, columnspan=3, pady=5)
+        self.copy_button.grid(row=7, column=0, columnspan=3, pady=5)
         
         # Progress bar
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(main_frame, mode='determinate', 
                                           variable=self.progress_var)
-        self.progress_bar.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        self.progress_bar.grid(row=8, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
 
         # Status bar
         self.status_var = tk.StringVar()
@@ -223,10 +339,8 @@ class TimeDilationCalculator(tk.Tk):
         # Add tooltips to input fields
         self.create_tooltip(self.velocity_entry, 
             "Enter velocity as a percentage of light speed (0-100 exclusive)")
-        self.create_tooltip(self.time_entry, 
-            "Enter the amount of time that passes on Earth (in years)")
-        self.create_tooltip(self.unit_combo, 
-            "Select the unit for displaying the speed of light")
+        self.create_tooltip(self.measurement_combo, 
+            "Select the measurement type (Time/Distance)")
         self.create_tooltip(self.copy_button, 
             "Copy the calculation results to clipboard")
         
@@ -285,9 +399,26 @@ class TimeDilationCalculator(tk.Tk):
             logging.error(f"Error during cleanup: {str(e)}")
             self.destroy()
             
+    def update_measurement_label(self, event=None):
+        """Update the label and show/hide distance units based on measurement type selection."""
+        measurement_type = self.measurement_var.get()
+        
+        if measurement_type == "Time":
+            self.measurement_label.configure(text="Time on Earth (years):")
+            self.create_tooltip(self.time_entry, 
+                "Enter the amount of time that passes on Earth (in years)")
+            self.distance_unit_label.grid_remove()
+            self.distance_unit_combo.grid_remove()
+        else:  # Distance
+            self.measurement_label.configure(text="Distance to Travel:")
+            self.create_tooltip(self.time_entry, 
+                "Enter the distance to travel (units selectable on the right)")
+            self.distance_unit_label.grid()
+            self.distance_unit_combo.grid()
+
     def calculate(self):
         """
-        Perform time dilation calculations with enhanced validation and progress tracking.
+        Perform time dilation calculations with correct distance-to-time conversion.
         
         This method:
         1. Validates user input
@@ -309,9 +440,25 @@ class TimeDilationCalculator(tk.Tk):
             if velocity is None:
                 raise ValueError("Please enter a valid number for velocity")
             
-            earth_time = safe_decimal_convert(self.time_var.get())
-            if earth_time is None:
-                raise ValueError("Please enter a valid number for time")
+            # Convert input based on measurement type
+            measurement_type = self.measurement_var.get()
+            input_value = safe_decimal_convert(self.time_var.get())
+            
+            if input_value is None:
+                raise ValueError(f"Please enter a valid number for {measurement_type.lower()}")
+            
+            if input_value <= 0:
+                raise ValueError(f"{measurement_type} must be positive")
+
+            # Calculate earth time based on measurement type
+            if measurement_type == "Distance":
+                unit = self.distance_unit_var.get()[:2].lower()  # Get 'ly', 'km', or 'mi'
+                # Calculate how long it takes to travel the distance at given velocity
+                earth_time = convert_distance_to_travel_time(input_value, velocity, unit)
+                if earth_time is None:
+                    raise ValueError("Error calculating travel time")
+            else:
+                earth_time = input_value * Decimal("31557600")  # Convert years to seconds
             
             self.progress_var.set(self.PROGRESS_STEPS['INPUT_VALIDATED'])
             
@@ -322,12 +469,9 @@ class TimeDilationCalculator(tk.Tk):
             if velocity >= 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999:
                 raise ValueError(
                     "Velocity is too close to the speed of light. "
-                    "Calculations become unreliable above 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999% of c due to "
+                    "Calculations become unreliable above 99.99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999% of c due to "
                     "extreme relativistic effects."
                 )
-            
-            if earth_time <= 0:
-                raise ValueError("Time must be positive")
             
             # Unit selection and calculation
             unit_index = ["m/s", "cm/s", "mm/s", "μm/s", "nm/s"].index(self.unit_var.get())
@@ -343,15 +487,14 @@ class TimeDilationCalculator(tk.Tk):
             self.progress_var.set(self.PROGRESS_STEPS['GAMMA_CALCULATED'])
             
             # Calculate time dilation
-            earth_time_seconds = earth_time * Decimal("31557600")
-            traveler_time_seconds = time_dilation(earth_time_seconds, velocity, c_current)
+            traveler_time = time_dilation(earth_time, velocity, c_current)
             
             self.progress_var.set(self.PROGRESS_STEPS['TIME_CALCULATED'])
             
             # Format and display results
             result = format_output(
-                earth_time_seconds,
-                traveler_time_seconds,
+                earth_time,
+                traveler_time,
                 gamma,
                 str(velocity),
                 f"{format_large_or_small_number(c_current)} {self.unit_var.get()}"
@@ -364,7 +507,7 @@ class TimeDilationCalculator(tk.Tk):
             logging.info(
                 f"Calculation completed - "
                 f"Velocity: {velocity}%, "
-                f"Time: {earth_time} years, "
+                f"Time: {earth_time} {measurement_type}, "
                 f"Gamma: {gamma}, "
                 f"Unit: {self.unit_var.get()}"
             )
