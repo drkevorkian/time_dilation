@@ -3,6 +3,7 @@ import logging
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 from decimal import Decimal, getcontext, InvalidOperation, DivisionByZero, Overflow
+import webbrowser
 
 getcontext().prec = 200  # Set precision to handle extreme values
 
@@ -254,7 +255,7 @@ class TimeDilationCalculator(tk.Tk):
         
         self.title("Time Dilation Calculator")
         self.geometry("800x600")
-        self.configure(bg='#f0f0f0')
+        self.configure(bg='#f8f8ff')
 
         # Configure grid weights for main window
         self.grid_rowconfigure(0, weight=1)
@@ -345,58 +346,163 @@ class TimeDilationCalculator(tk.Tk):
         self.references_tab = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.references_tab, text="References")
         
-        # Create scrolled text for references
-        self.references_text = scrolledtext.ScrolledText(self.references_tab, width=80, height=30)
-        self.references_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.references_text.insert(tk.END, """Time Dilation and Relativity References:
+        # Configure the references tab to expand
+        self.references_tab.grid_columnconfigure(0, weight=1)
+        self.references_tab.grid_rowconfigure(0, weight=1)
+        
+        # Create main frame for references that will contain the canvas
+        self.main_frame = ttk.Frame(self.references_tab)
+        self.main_frame.grid(row=0, column=0, sticky="nsew")
+        self.main_frame.grid_columnconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(0, weight=1)
+        
+        # Create canvas and scrollbar
+        self.canvas = tk.Canvas(self.main_frame, bg='white')
+        self.scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
+        
+        # Create the scrollable frame
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.scrollable_frame.grid_columnconfigure(0, weight=1)
+        self.scrollable_frame.grid_columnconfigure(1, weight=1)
+        
+        # Configure the canvas
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # Pack the canvas and scrollbar
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Create the canvas window
+        self.canvas_frame = self.canvas.create_window((0,0), window=self.scrollable_frame, anchor="nw")
+        
+        # Configure canvas scrolling
+        def configure_scroll_region(event):
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        
+        def configure_canvas_window(event):
+            width = event.width
+            self.canvas.itemconfig(self.canvas_frame, width=width)
+        
+        self.scrollable_frame.bind('<Configure>', configure_scroll_region)
+        self.canvas.bind('<Configure>', configure_canvas_window)
 
-1. Einstein, A. (1905) "On the Electrodynamics of Moving Bodies" - Original paper introducing special relativity
-   https://www.fourmilab.ch/etexts/einstein/specrel/www/
+        def add_paper_link(title, description, url, category, row, column):
+            # Create a frame that will expand with window
+            section_frame = ttk.Frame(self.scrollable_frame, style='Card.TFrame')
+            section_frame.grid(row=row, column=column, sticky="nsew", padx=5, pady=2)
+            
+            # Configure the style for the frame
+            style = ttk.Style()
+            style.configure('Card.TFrame', background='#ace5ee')
+            
+            # Make frame expand in width equally
+            section_frame.grid_columnconfigure(0, weight=1)
+            
+            # Category label with document icon - full width
+            category_label = ttk.Label(section_frame, text=f"📄 {category}", 
+                                     font=("Segoe UI", 11, "bold"),
+                                     background='#ace5ee', anchor="w",
+                                     wraplength=300)  # Prevent text wrapping
+            category_label.grid(row=0, column=0, sticky="ew", padx=5, pady=(5,0))
+            
+            # Title as clickable button - full width
+            title_button = tk.Button(section_frame, text=title,
+                                   font=("Segoe UI", 10, "underline"),
+                                   fg="#0000FF", bg='#ace5ee', cursor="hand2",
+                                   borderwidth=0, relief="flat",
+                                   anchor="w", justify="left",
+                                   wraplength=300,  # Consistent wrapping
+                                   command=lambda u=url: webbrowser.open_new(u))  # Restored browser command
+            title_button.grid(row=1, column=0, sticky="ew", padx=20)
+            
+            # Description in italics - full width with consistent height
+            desc_label = ttk.Label(section_frame, text=description,
+                                 font=("Segoe UI", 10, "italic"),
+                                 background='#ace5ee',
+                                 foreground='#000000', anchor="w",
+                                 wraplength=300,  # Consistent wrapping
+                                 padding=(0, 2))  # Consistent vertical padding
+            desc_label.grid(row=2, column=0, sticky="ew", padx=20, pady=(0,5))
 
-2. Hawking, S. (1988) "A Brief History of Time" - Comprehensive overview of space, time, and the universe
-   ISBN: 978-0553380163
+        # Complete list of references with exact text matching
+        references = [
+            # Foundational Works
+            ("On the Electrodynamics of Moving Bodies (1905)",
+             "The paper that introduced special relativity to the world",
+             "https://www.fourmilab.ch/etexts/einstein/specrel/www/",
+             "Foundational Works"),
+            
+            # Classic Books
+            ("A Brief History of Time - Stephen Hawking",
+             "A landmark exploration of space, time, and the universe",
+             "https://drive.google.com/file/d/0B1PBdu03t91DYUdVc0c4Y2Vzb0k/view?pli=1&resourcekey=0-evEIWkVG3IO0k73tz2dlSw",
+             "Classic Books"),
+            
+            # Educational Resources
+            ("MIT OpenCourseWare: Special Relativity",
+             "Complete university course materials with video lectures",
+             "https://ocw.mit.edu/courses/physics/8-20-introduction-to-special-relativity-january-iap-2021/",
+             "Educational Resources"),
+            
+            ("Stanford Encyclopedia: Spacetime Theories",
+             "Comprehensive academic overview of time dilation concepts",
+             "https://plato.stanford.edu/entries/spacetime-theories/",
+             "Educational Resources"),
+            
+            # Experimental Evidence
+            ("APS Physics: Time Dilation Evidence",
+             "Famous atomic clock experiment that confirmed time dilation",
+             "https://physics.aps.org/story/v15/st4",
+             "Experimental Evidence"),
+            
+            # Modern Applications
+            ("GPS and Relativity",
+             "How GPS satellites account for relativistic time dilation",
+             "https://www.astronomy.ohio-state.edu/pogge.1/Ast162/Unit5/gps.html",
+             "Modern Applications"),
+            
+            # Interactive Tools
+            ("PhET Interactive Simulations",
+             "University of Colorado's relativity simulations",
+             "https://phet.colorado.edu/en/simulations/filter?subjects=physics&type=html,prototype",
+             "Interactive Tools"),
+            
+            # Additional Resources
+            ("Hyperphysics: Time Dilation",
+             "Comprehensive physics reference with calculations",
+             "http://hyperphysics.phy-astr.gsu.edu/hbase/Relativ/tdil.html",
+             "Additional Resources"),
+            
+            # Video Lectures
+            ("Leonard Susskind: Special Relativity",
+             "Stanford University's complete lecture series on special relativity",
+             "https://theoreticalminimum.com/courses/special-relativity",
+             "Video Lectures"),
+            
+            # Software Tools
+            ("Relativistic Calculator",
+             "Online tool for computing relativistic effects",
+             "https://www.omnicalculator.com/physics/time-dilation",
+             "Software Tools"),
+            
+            # Historical Context
+            ("Einstein Papers Project",
+             "Digital archive of Einstein's special relativity papers",
+             "https://einsteinpapers.press.princeton.edu/",
+             "Historical Context"),
+            
+            # Advanced Topics
+            ("Lorentz Transformations",
+             "Detailed mathematical foundation of special relativity",
+             "https://mathworld.wolfram.com/LorentzTransformation.html",
+             "Advanced Topics")
+        ]
 
-3. NASA: Time Dilation
-   https://science.nasa.gov/science-news/science-at-nasa/2014/28sep_timekeeper
-
-4. NIST: Time Dilation Calculator
-   https://www.nist.gov/pml/time-and-frequency-division/time-services
-
-5. PBS Space Time: The Reality of Time Dilation
-   https://www.youtube.com/c/pbsspacetime
-
-6. Hubble Constant Measurement
-   https://hubblesite.org/contents/news-releases/2019/news-2019-19
-
-7. Carroll, S. (2019) "Something Deeply Hidden: Quantum Worlds and the Emergence of Spacetime"
-   ISBN: 978-1524743017
-
-8. Greene, B. (2004) "The Fabric of the Cosmos: Space, Time, and the Texture of Reality"
-   ISBN: 978-0375727207
-
-9. Thorne, K. S. (2014) "The Science of Interstellar" - Scientific explanation of time dilation in space travel
-   ISBN: 978-0393351378
-
-10. Relativity: The Special and General Theory by Albert Einstein
-    https://www.gutenberg.org/ebooks/5001
-
-11. Physical Review Letters: Latest Research on Time Dilation
-    https://journals.aps.org/prl/
-
-12. European Space Agency: Time Dilation Experiments
-    https://www.esa.int/Science_Exploration
-
-13. CERN: Particle Physics and Time Dilation
-    https://home.cern/science/physics/time-dilation
-
-14. Hafele-Keating Experiment (1971) - Experimental proof of time dilation
-    https://science.nasa.gov/science-news/science-at-nasa/2014/28sep_timekeeper
-
-15. MIT OpenCourseWare: Special Relativity
-    https://ocw.mit.edu/courses/physics/8-20-introduction-to-special-relativity-january-iap-2021/
-
-Note: URLs and resources should be verified for current availability.
-""")
+        # Add all references in two columns
+        for i, (title, desc, url, category) in enumerate(references):
+            row = i // 2
+            col = i % 2
+            add_paper_link(title, desc, url, category, row, col)
 
         # Tab 3: Source Code
         self.source_tab = ttk.Frame(self.notebook, padding="10")
@@ -406,26 +512,11 @@ Note: URLs and resources should be verified for current availability.
         self.source_text = scrolledtext.ScrolledText(self.source_tab, width=80, height=30, font=('Courier', 10))
         self.source_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # Try to fetch source code from GitHub
-        try:
-            import urllib.request
-            url = "https://raw.githubusercontent.com/drkevorkian/time_dilation/refs/heads/main/pypy.py"
-            with urllib.request.urlopen(url) as response:
-                source = response.read().decode('utf-8')
-            self.source_text.insert(tk.END, source)
-        except Exception as e:
-            offline_message = """
-            Unable to display source code - No internet connection
-
-            The source code for this application is hosted on GitHub.
-            Please connect to the internet to view the source code at:
-            https://github.com/drkevorkian/time_dilation
-
-            Error details: {}
-            """.format(str(e))
-            self.source_text.insert(tk.END, offline_message)
+        # Bind tab selection event
+        self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_changed)
         
-        self.source_text.configure(state='disabled')  # Make source code read-only
+        # Initial fetch of source code
+        self.fetch_source_code()
 
         # Configure grid weights for tabs
         self.calculator_tab.grid_columnconfigure(0, weight=1)
@@ -583,10 +674,10 @@ Note: URLs and resources should be verified for current availability.
             if not (0 < velocity < 100):
                 raise ValueError("Velocity must be between 0 and 100 percent of c (exclusive)")
             
-            if velocity >= 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999:
+            if velocity >= 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999:
                 raise ValueError(
                     "Velocity is too close to the speed of light. "
-                    "Calculations become unreliable above 99.99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999% of c due to "
+                    "Calculations become unreliable above 99.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999% of c due to "
                     "extreme relativistic effects."
                 )
             
@@ -646,6 +737,37 @@ Note: URLs and resources should be verified for current availability.
         """Restore placeholder text if entry is empty and loses focus."""
         if not self.velocity_entry.get():
             self.velocity_entry.insert(0, "99.999999999999")
+
+    def fetch_source_code(self):
+        """Fetch source code from GitHub and update the source text widget."""
+        # Only fetch if source tab is selected
+        if self.notebook.select() == str(self.source_tab):
+            self.source_text.configure(state='normal')
+            self.source_text.delete(1.0, tk.END)
+            
+            try:
+                import urllib.request
+                url = "https://raw.githubusercontent.com/drkevorkian/time_dilation/refs/heads/main/pypy.py"
+                with urllib.request.urlopen(url) as response:
+                    source = response.read().decode('utf-8')
+                self.source_text.insert(tk.END, source)
+            except Exception as e:
+                offline_message = """
+                Unable to display source code - No internet connection
+
+                The source code for this application is hosted on GitHub.
+                Please connect to the internet to view the source code at:
+                https://github.com/drkevorkian/time_dilation
+
+                Error details: {}
+                """.format(str(e))
+                self.source_text.insert(tk.END, offline_message)
+            
+            self.source_text.configure(state='disabled')
+
+    def on_tab_changed(self, event):
+        """Handle tab change events."""
+        self.fetch_source_code()
 
 if __name__ == "__main__":
     # Set up logging with timestamp
