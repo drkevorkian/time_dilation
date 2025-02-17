@@ -260,8 +260,16 @@ class TimeDilationCalculator(tk.Tk):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # Create main frame
-        main_frame = ttk.Frame(self, padding="10")
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self)
+        self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Tab 1: Calculator
+        self.calculator_tab = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.calculator_tab, text="Calculator")
+
+        # Move all existing calculator widgets to calculator_tab instead of self
+        main_frame = ttk.Frame(self.calculator_tab, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Configure grid weights for main_frame
@@ -333,7 +341,101 @@ class TimeDilationCalculator(tk.Tk):
                                           variable=self.progress_var)
         self.progress_bar.grid(row=8, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
 
-        # Status bar
+        # Tab 2: References
+        self.references_tab = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.references_tab, text="References")
+        
+        # Create scrolled text for references
+        self.references_text = scrolledtext.ScrolledText(self.references_tab, width=80, height=30)
+        self.references_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.references_text.insert(tk.END, """Time Dilation and Relativity References:
+
+1. Einstein, A. (1905) "On the Electrodynamics of Moving Bodies" - Original paper introducing special relativity
+   https://www.fourmilab.ch/etexts/einstein/specrel/www/
+
+2. Hawking, S. (1988) "A Brief History of Time" - Comprehensive overview of space, time, and the universe
+   ISBN: 978-0553380163
+
+3. NASA: Time Dilation
+   https://science.nasa.gov/science-news/science-at-nasa/2014/28sep_timekeeper
+
+4. NIST: Time Dilation Calculator
+   https://www.nist.gov/pml/time-and-frequency-division/time-services
+
+5. PBS Space Time: The Reality of Time Dilation
+   https://www.youtube.com/c/pbsspacetime
+
+6. Hubble Constant Measurement
+   https://hubblesite.org/contents/news-releases/2019/news-2019-19
+
+7. Carroll, S. (2019) "Something Deeply Hidden: Quantum Worlds and the Emergence of Spacetime"
+   ISBN: 978-1524743017
+
+8. Greene, B. (2004) "The Fabric of the Cosmos: Space, Time, and the Texture of Reality"
+   ISBN: 978-0375727207
+
+9. Thorne, K. S. (2014) "The Science of Interstellar" - Scientific explanation of time dilation in space travel
+   ISBN: 978-0393351378
+
+10. Relativity: The Special and General Theory by Albert Einstein
+    https://www.gutenberg.org/ebooks/5001
+
+11. Physical Review Letters: Latest Research on Time Dilation
+    https://journals.aps.org/prl/
+
+12. European Space Agency: Time Dilation Experiments
+    https://www.esa.int/Science_Exploration
+
+13. CERN: Particle Physics and Time Dilation
+    https://home.cern/science/physics/time-dilation
+
+14. Hafele-Keating Experiment (1971) - Experimental proof of time dilation
+    https://science.nasa.gov/science-news/science-at-nasa/2014/28sep_timekeeper
+
+15. MIT OpenCourseWare: Special Relativity
+    https://ocw.mit.edu/courses/physics/8-20-introduction-to-special-relativity-january-iap-2021/
+
+Note: URLs and resources should be verified for current availability.
+""")
+
+        # Tab 3: Source Code
+        self.source_tab = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.source_tab, text="Source Code")
+        
+        # Create scrolled text for source code
+        self.source_text = scrolledtext.ScrolledText(self.source_tab, width=80, height=30, font=('Courier', 10))
+        self.source_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Try to fetch source code from GitHub
+        try:
+            import urllib.request
+            url = "https://raw.githubusercontent.com/drkevorkian/time_dilation/refs/heads/main/pypy.py"
+            with urllib.request.urlopen(url) as response:
+                source = response.read().decode('utf-8')
+            self.source_text.insert(tk.END, source)
+        except Exception as e:
+            offline_message = """
+            Unable to display source code - No internet connection
+
+            The source code for this application is hosted on GitHub.
+            Please connect to the internet to view the source code at:
+            https://github.com/drkevorkian/time_dilation
+
+            Error details: {}
+            """.format(str(e))
+            self.source_text.insert(tk.END, offline_message)
+        
+        self.source_text.configure(state='disabled')  # Make source code read-only
+
+        # Configure grid weights for tabs
+        self.calculator_tab.grid_columnconfigure(0, weight=1)
+        self.calculator_tab.grid_rowconfigure(0, weight=1)
+        self.references_tab.grid_columnconfigure(0, weight=1)
+        self.references_tab.grid_rowconfigure(0, weight=1)
+        self.source_tab.grid_columnconfigure(0, weight=1)
+        self.source_tab.grid_rowconfigure(0, weight=1)
+
+        # Status bar should be below notebook
         self.status_var = tk.StringVar()
         self.status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.grid(row=1, column=0, sticky=(tk.W, tk.E))
